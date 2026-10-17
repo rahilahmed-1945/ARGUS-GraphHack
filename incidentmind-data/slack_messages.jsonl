@@ -1,5 +1,0 @@
-{"user":"alice","message":"checkout latency increasing badly","timestamp":"2026-05-26T10:15:00Z","service":"checkout"}
-
-{"user":"alice","message":"retry system behaving strangely","timestamp":"2026-05-26T10:18:00Z","service":"checkout"}
-
-{"user":"bob","message":"seeing auth spikes after deploy","timestamp":"2026-05-26T10:25:00Z","service":"auth"}
