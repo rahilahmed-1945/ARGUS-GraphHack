@@ -14,6 +14,54 @@ ARGUS is a graph-grounded RED / BLUE agent that attacks a copy of your system in
 
 ---
 
+# Run ARGUS Yourself — Bring Your Own API Key
+
+Judges have two ways to explore ARGUS:
+
+- **Hosted public demo** at https://argus-graphhack.onrender.com. A stable, repeatable replay of a genuine live run; no API key, no setup. Every graph query, fork, simulation, audit and world tick executes on the server when you press start; only the agents' recorded decisions are replayed, and the UI says so.
+- **Local live mode** with your own OpenRouter API key. Clone the repository, start FalkorDB, put your key and a model id in `argus/.env`, and run the same system with RED and BLUE driven by a real model. The full walkthrough is the [Local Setup and Judge Testing Guide](#local-setup-and-judge-testing-guide) at the end of this file.
+
+### AI-first architecture with deterministic reliability
+
+ARGUS is built to let AI agents do the investigation and the recovery proposal. With a valid `OPENROUTER_API_KEY` and an `ARGUS_LLM_MODEL` that supports tool calling, RED and BLUE are LLM agents: the model chooses which graph tools to call (Cypher queries, the amplifier-path query, PageRank, blast radius, candidate listing), which fault sets to simulate, which interventions to fork and test, and what to commit. Every call goes through MCP to a server that validates it, charges the budget, executes it on FalkorDB and records it.
+
+**The deterministic B5 autopilot is the reliability layer, not the primary decision-maker.** It drives the same tools and is subject to the same decision rule and minimality audit, and it takes over a phase only under the conditions implemented in `argus/runtime/runtime.js`:
+
+| Takeover reason (as labelled in the UI, `/state` and the recorded cassette) | Trigger |
+|---|---|
+| `llm_error` | The provider returned an error (HTTP error such as an unknown model or a rate limit, a network failure) |
+| `turn_ceiling` | One model turn took longer than the ceiling (default 6 000 ms; `--ceiling-ms` raises it) |
+| `consecutive_rejects` | Two consecutive tool calls were rejected or unusable (unparseable arguments, out-of-scope ids, empty replies) |
+| `no_progress` | Four `simulate` (RED) or `fork_and_simulate` (BLUE) calls without a qualifying result |
+| `max_turn` | Turn 8 of the phase arrived without a commit |
+| `budget_exhausted` | The agent spent its tool, simulation or fork budget for the round |
+| `mcp_unavailable`, `tool_failure` | The MCP tool server could not start, or the database or driver failed mid-phase |
+| `cassette_miss` | Replay only: the cassette holds no decision for this turn |
+| `llm_unavailable` | No model is configured (autopilot mode) |
+
+So B5 does not activate only when an API call fails: a model that is slow, stuck, or wandering is also handed over, and the phase is labelled `autopilot (<reason>)`. Nothing in live mode guarantees that every phase is model-decided, and a completed run never proves it either. Check the provenance: the engine badge, the provenance line under the stage, the `phases` field of `/state` after a run, and the `provenance` block of the cassette the run records.
+
+The hosted demo replays a recorded execution for a stable demonstration; its recorded LLM decisions remain recorded decisions. Running locally in live mode is how to test model-dependent behaviour yourself, subject to provider availability, model limits, latency and your account's usage costs.
+
+### Mode comparison
+
+| Feature | Hosted public demo | Local replay | Local live mode |
+|---|---|---|---|
+| API key | Not required (live runs on the hosted instance are operator-only) | Not required; only the two FalkorDB passwords that `npm run db:up` generates | Required: `OPENROUTER_API_KEY` and `ARGUS_LLM_MODEL` in `argus/.env` |
+| Execution | The runtime, graph forks, simulations, audits and world ticks run live on the server; agent decisions come from `cassettes/public-live-replay.json` | Same mechanism. Default cassette: `reference-scripted.json`, a recording of the deterministic scripted reference models (labelled "not a real LLM recording"); pass `--cassette cassettes/public-live-replay.json` for the recorded live run | Real OpenRouter requests at temperature 0 with tool calling, paced at one request per 4.5 s by default; the run is recorded to a new cassette with provenance |
+| New LLM decisions | None: no model is called | None: no model is called | Yes, for every phase until a takeover, if any |
+| Deterministic B5 fallback | Shown where the recorded run took over: in the public cassette, three of four phases (`max_turn`, `no_progress`, `turn_ceiling`); the fourth (round-2 RED) was model-decided | Where the cassette took over, plus `cassette_miss` when the cassette has no decision for a turn | Takes over on the implemented conditions above; its calls are labelled `b5` / `autopilot` |
+| Custom testing | GUIDED DEMO, CONTROL THE SYSTEM (your choice of configuration, run by the scripted reference models, labelled `INTERACTIVE (scripted)`), Run again, Reset; one run start per visitor per 15 s | Everything the hosted demo offers, plus any cassette, `--mode autopilot` (B5 only), the terminal demo and the test suites | Live runs with your model, `--ceiling-ms`, `--record` to keep the cassette, then replay your own recording. CONTROL THE SYSTEM is refused in live mode (the scripted models are never mixed into a live session) |
+| Provenance | Provenance line and `/state.source`: `cassette · live OpenRouter run (UI) · R1 RED b5 (max_turn) · R1 BLUE b5 (no_progress) · R2 RED llm · R2 BLUE b5 (turn_ceiling)` | The cassette's own provenance, shown the same way | Badge `LIVE LLM`; provenance line with provider, model, ceiling and each phase's `llm` or `autopilot (<reason>)`; `/state` fields `live`, `model`, `ceilingMs`, `phases`, `cassette`; `by: "llm"` or `"b5"` on every tool call in the event stream |
+
+### OpenRouter and model configuration
+
+- You supply your own OpenRouter API key (https://openrouter.ai, Keys). ARGUS reads it from `OPENROUTER_API_KEY` and never prints it, stores it in a cassette, or sends it to the browser.
+- `ARGUS_LLM_MODEL` must be a model id available to your account that supports tool calling (the id as shown on https://openrouter.ai/models, for example a `vendor/model` string). ARGUS has no default model: if the variable is missing, live mode refuses to start with a clear message instead of guessing.
+- Availability, latency, rate limits and charges depend on the model and OpenRouter's terms. Free routes have per-minute and per-day caps and can be slow; ARGUS paces requests (4.5 s apart by default, `ARGUS_LLM_MIN_INTERVAL_MS` overrides) and never retries a failed request.
+- Never share the key or commit it: `argus/.gitignore` ignores `.env`, and the Docker image excludes it.
+- A slow, erroring or stuck model hands the phase to B5 under the conditions listed above. A successful run therefore does not prove every decision was generated by the model; inspect the provenance.
+
 ## 1. What if you could find an outage before it happens?
 
 A service slows down. The services that call it retry their requests. Those retries multiply traffic across the system, and one small problem turns into a cascading outage. And the service that *looks* broken is often not the service that *started* it.
@@ -256,7 +304,9 @@ Algorithms, each of which changes what an agent does:
 
 ## 9. Quick start (tested on Windows 11 with Docker Desktop, Node 22)
 
-Prerequisites: Node.js 22 or newer, Docker.
+The step-by-step version for judges, with environment variables, live mode, a testing checklist and troubleshooting, is the [Local Setup and Judge Testing Guide](#local-setup-and-judge-testing-guide) at the end.
+
+Prerequisites: Node.js 22.9 or newer, Docker with Compose v2.
 
 ```bash
 cd argus
@@ -275,7 +325,7 @@ Other commands:
 
 ```bash
 npm run demo                      # the full run in the terminal, with the event log
-npm test                          # 198 tests across graph, simulator, forks, decision rule, agents, MCP, UI and deployment (needs db:up)
+npm test                          # 203 tests across graph, simulator, forks, decision rule, agents, MCP, UI and deployment (needs db:up)
 npm run test:ai                   # offline agent tests against a mock OpenRouter endpoint (no network)
 npm run test:ai:e2e               # one end-to-end run through the real MCP transport
 npm run reset                     # delete every graph and reseed from config/topology.yaml
@@ -337,6 +387,203 @@ No IncidentMind code is reused.
 ## 14. Demo video
 
 Coming soon. The link will be added here once the recording exists.
+
+## 15. What works, what to expect, and current limitations
+
+### Verified graph and simulator behaviour (covered by the test suites: 203 tests in `npm test`, 21 in `npm run test:ai`, 1 end-to-end)
+
+- The twin and world graphs are built from `argus/config/topology.yaml`: 8 services, 9 `CALLS` edges with retry, timeout and breaker settings, 2 pending change events. The action spaces (10 faults, 27 interventions) are generated by Cypher rules and regenerated after every hardening.
+- The amplifier-path query, PageRank, blast radius and scope queries run on FalkorDB and return the values quoted in section 7.
+- Every counterfactual future is a real `GRAPH.COPY` fork of the twin, mutated by a fixed template and simulated with 16 seeded rollouts; the summary is written back as a `Future` node and the fork is deleted.
+- The decision rule (`argmin cost | p_recover ≥ 15/16 AND median bad ticks ≤ 10 AND not harmful`) and the minimality audit run on the server at commit; a proposal the rule does not select is refused with the rule's winner named.
+- The chosen intervention is applied to the twin and the hidden world, the world is simulated on, and an `Observation` records predicted versus observed bad ticks and whether the observation fell inside the predicted band. In the recorded run: round 1 predicted 2 (band 1–3), observed 3; round 2 predicted 0, observed 0.
+- The MCP boundary holds: the agents' database user cannot read the world graph, and the server refuses unauthorised tools, out-of-scope ids, oversized futures and conflicting edits.
+
+### Live AI behaviour
+
+In live mode RED and BLUE are LLM agents over the MCP tools. The model decides what to query, what to simulate and what to commit; the server decides what is valid and what is accepted. Results vary with the model, its latency, provider availability, the turn ceiling you set, and the current graph state (round 2 runs on the graph round 1 hardened, so a different fix changes what round 2 can find). Two runs with the same model need not produce the same decisions, and a model may be handed to B5 in any phase.
+
+### Deterministic B5 reliability fallback
+
+B5 is a deterministic policy over the same tools. RED: the amplifier-path query first and its triggers simulated singly then in pairs, or, when the query is empty, PageRank and the pending deploys into the top service; it submits the first scenario that sustains in at least 8 of 16 rollouts. BLUE: the do-nothing future, then retries off on every amplifier edge as one future, then in-scope singles in ascending cost, stopping at the first green future and committing through the same rule. It takes over a phase under the reasons listed in the table at the top (`llm_error`, `turn_ceiling`, `consecutive_rejects`, `no_progress`, `max_turn`, `budget_exhausted`, `mcp_unavailable`, `tool_failure`, `cassette_miss`), keeps the model's work so far, draws any further calls from the remaining budget and then a small autopilot reserve, and is held to the same rule and audit. It is not the primary decision-maker, and its triggers are not limited to API failures.
+
+### Prerecorded replay
+
+The hosted demo and `npm run ui` replay a cassette. Replay re-executes everything except the agents' choices, which are looked up by a key over role, round, turn and history. A recorded LLM decision replayed is still a recorded decision: no model is called, and a key with no recorded decision hands the phase to B5 with reason `cassette_miss`.
+
+### Limitations
+
+- Model-dependent: no model is guaranteed to select a particular intervention, finish within the ceiling, or avoid a takeover. The public recording is honest about this (one of four phases model-decided).
+- The world is a second FalkorDB graph driven by the same simulator with hidden parameter differences, not a real system; one failure class and an eight-service topology (section 12).
+- Scoped minimality only: the audit proves no cheaper qualifying set exists among in-scope sets of at most two interventions.
+- CONTROL THE SYSTEM (the judge's configuration choice) runs the deterministic reference models, never a model, and is unavailable in live mode.
+- Live mode has been exercised only with OpenRouter free routes during development; paid or other models have not been tested, and `OPENROUTER_BASE_URL` has not been verified against other OpenAI-compatible endpoints.
+- The terminal demo (`npm run demo`) prints the event log and serves the raw event stream on a Socket.IO port; it is not a second UI.
+
+---
+
+# Local Setup and Judge Testing Guide
+
+Written for a judge who has not seen ARGUS before and wants to run it independently.
+
+### Prerequisites
+
+- **Node.js 22.9 or newer** (the npm scripts use `--env-file-if-exists`; `package.json` declares `"engines": { "node": ">=22" }`). Verified with v22.23.
+- **Docker with Compose v2** (`docker compose up -d --wait` is used). Docker Desktop on Windows or macOS, or Docker Engine on Linux.
+- **git**, and about 1 GB of free disk for the FalkorDB image.
+- Verified on Windows 11 with Docker Desktop (PowerShell and Git Bash) and inside a Linux container (the Render deployment). macOS and Linux desktops are expected to work with the same commands but were not exercised during the hackathon. `npm run probe` (an optional FalkorDB feature probe) needs `bash`.
+
+### Step 1 — Clone and enter the repository
+
+```bash
+git clone https://github.com/rahilahmed-1945/ARGUS-GraphHack.git
+```
+
+```bash
+cd ARGUS-GraphHack/argus
+```
+
+Everything below runs inside `argus/`.
+
+### Step 2 — Install dependencies
+
+```bash
+npm ci
+```
+
+Installs the runtime dependencies from `package-lock.json` (FalkorDB and Redis clients, the MCP SDK, Socket.IO, three.js, js-yaml) and the single dev dependency (`socket.io-client`, used by the tests).
+
+### Step 3 — Start FalkorDB
+
+```bash
+npm run db:up
+```
+
+This runs three things, in order: `scripts/init-env.js` creates `argus/.env` with random `ARGUS_ADMIN_PASSWORD` and `ARGUS_AGENT_PASSWORD` values if they are missing (existing values are kept); `docker compose up -d --wait` starts the pinned `falkordb/falkordb:6.0.1` image as the container `argus-falkordb` on `localhost:6379` and waits for its health check (`redis-cli PING`); `graph/acl.js` puts the admin password on the `default` user and creates the restricted `agent` user the MCP servers connect as. There is no persistence volume: every demo and test starts from a fresh seed.
+
+Checks:
+
+```bash
+docker ps --filter name=argus-falkordb
+```
+
+should show `(healthy)`. Because the ACL is in place, an unauthenticated ping is refused, which is the expected state:
+
+```bash
+docker exec argus-falkordb redis-cli PING
+```
+
+prints `NOAUTH Authentication required.`. To reseed the graphs by hand at any time:
+
+```bash
+npm run reset
+```
+
+Safe shutdown (stops and removes the container; the next `npm run db:up` recreates and re-bootstraps it):
+
+```bash
+npm run db:down
+```
+
+### Step 4 — Configure environment variables
+
+All variables are read from `argus/.env` by the npm scripts (`node --env-file-if-exists=.env …`). The variables the implementation reads:
+
+| Variable | Required | Read by | Meaning |
+|---|---|---|---|
+| `ARGUS_ADMIN_PASSWORD` | yes (generated by `npm run db:up`) | `graph/db.js`, `graph/acl.js` | FalkorDB admin (`default` user) password |
+| `ARGUS_AGENT_PASSWORD` | yes (generated) | `graph/db.js`, `graph/acl.js` | password of the restricted `agent` user used by the MCP servers |
+| `ARGUS_FALKORDB_HOST` | no (default `localhost`) | `graph/db.js` | database host |
+| `ARGUS_FALKORDB_PORT` | no (default `6379`) | `graph/db.js` | database port |
+| `OPENROUTER_API_KEY` | live mode only | `runtime/providers/openrouter.js` | your OpenRouter key |
+| `ARGUS_LLM_MODEL` | live mode only | same | OpenRouter model id with tool calling; no default |
+| `OPENROUTER_BASE_URL` | no (default `https://openrouter.ai/api/v1`) | same | OpenAI-compatible chat-completions base URL |
+| `ARGUS_LLM_MIN_INTERVAL_MS` | no (default `4500`) | same | minimum gap between provider requests; `0` disables pacing |
+| `ARGUS_PORT` | no (default `4000`) | `scripts/demo.js` | port of the terminal demo's Socket.IO event server |
+| `ARGUS_UI_MODE`, `ARGUS_UI_CASSETTE`, `ARGUS_UI_HOST`, `ARGUS_UI_PORT` / `PORT`, `ARGUS_UI_CEILING_MS`, `ARGUS_UI_RECORD`, `ARGUS_OPERATOR_TOKEN`, `ARGUS_PUBLIC_COOLDOWN_MS`, `ARGUS_LIVE_MAX_RUNS_PER_DAY` | no | `app/ui-server.js` | deployment settings; command-line flags win over them (see `docs/DEPLOY_RENDER.md`) |
+
+A safe `argus/.env` for live mode (the two password lines are already there after `npm run db:up`; keep them):
+
+```dotenv
+ARGUS_ADMIN_PASSWORD=<generated by npm run db:up, keep>
+ARGUS_AGENT_PASSWORD=<generated by npm run db:up, keep>
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+ARGUS_LLM_MODEL=your_available_model_id
+```
+
+- Obtain a key at https://openrouter.ai (sign in, Keys, create a key). Pick a model on https://openrouter.ai/models that your account can use and that supports tool calling; copy its id exactly.
+- `.env` is ignored by `argus/.gitignore`; confirm with `git check-ignore -v argus/.env` from the repository root. Never paste the key into a terminal, a screenshot or an issue.
+- To confirm the configuration without revealing the key: `npm run ui:live` prints `live LLM: model <id>; turn ceiling <ms> …` on start (never the key) and exits with code 3 and the message `live mode unavailable: OPENROUTER_API_KEY is not set` or `ARGUS_LLM_MODEL is not set` when one is missing; `curl http://127.0.0.1:4173/state` shows `"live": true` and `"model": "<id>"`. The key is never included in `/state`, the UI, the event stream or a recorded cassette.
+
+### Step 5 — Run without live API calls
+
+```bash
+npm run ui
+```
+
+Opens the command centre at http://127.0.0.1:4173 in replay mode of `cassettes/reference-scripted.json`, a recording of the deterministic scripted reference models (the UI's provenance line says "not a real LLM recording"). To replay the genuine live run that the hosted demo serves:
+
+```bash
+npm run ui -- --cassette cassettes/public-live-replay.json
+```
+
+To run the autopilot alone, with no cassette and no model:
+
+```bash
+npm run ui -- --mode autopilot
+```
+
+What you see: the landing page with GUIDED DEMO (a narrated run) and CONTROL THE SYSTEM (you pick a configuration, the scripted reference models attack it). The engine badge reads `REPLAY` or `AUTOPILOT`. Press `O` to show the operator controls (Run, Pause, speed, Replay, Reset). The left panel tells the story in plain words, the right column lists every FalkorDB query, graph copy and write with its Cypher under "▸ query", and the what-if cards show every future with its verdict. In replay mode every query, fork, simulation and audit is executed now on your FalkorDB; only the agents' choices are replayed, so a replay never shows a fresh model decision. The terminal equivalent, which prints the event log and the recorded phases:
+
+```bash
+npm run demo
+```
+
+### Step 6 — Run with your own API key
+
+```bash
+npm run ui:live -- --ceiling-ms 30000
+```
+
+`ui:live` is `app/ui-server.js --mode live`. The default turn ceiling is 6 000 ms (the specification's value); free and slow models rarely answer a tool-calling turn that fast, so 30 000 ms is the setting used for the public recording. Add `--record cassettes/my-run.json` to choose where the run's cassette is written (default `cassettes/recorded-ui-live-<timestamp>.json`); you can replay it later with `--cassette`. The terminal form is `npm run demo -- --mode live --ceiling-ms 30000`.
+
+How to tell what happened:
+
+1. **Live mode is active** when the start banner reads `live LLM: model …` and the UI badge reads `LIVE LLM`; `/state` has `"live": true`.
+2. **Provider and model**: the banner, the provenance line under the stage (`live LLM · openrouter · <model> · turn ceiling <ms>`), and `/state.model`. The key is never shown.
+3. **Decisions selected by the model**: every tool call in the activity panel carries a `live LLM` tag; in the event stream (`/state.view`, the recorded cassette, the Socket.IO `event` channel) each `TOOL_CALL` and `TOOL_RESULT` has `by: "llm"`; after the run the provenance line lists each phase as `llm`.
+4. **Decisions from B5**: calls carry `by: "b5"`, the phase is listed as `autopilot (<reason>)`, and a `TAKEOVER` event names the role, reason, turn and detail. `/state.phases` after the run, and the `provenance.phases` block of the recorded cassette, hold the same list.
+5. **Provider errors, timeouts, unusable replies**: the takeover reason tells you which (`llm_error` with the HTTP status in the detail, `turn_ceiling`, `consecutive_rejects`); the phase continues under B5 and the run completes, so a green result is not evidence that the model succeeded. ARGUS never retries a failed request and never switches models by itself.
+
+In live mode CONTROL THE SYSTEM is refused with "the interactive judge demo is not available in live mode". A full run makes one provider request per model turn, at most 8 turns per phase and 4 phases, so up to about 32 requests (the public recording holds 23 model decisions), paced 4.5 s apart; on a paid model this costs money, and on a free route it consumes your daily quota. Keep the key out of terminal output, logs, screenshots and the browser.
+
+### Step 7 — Judge testing checklist
+
+1. **Health**: `curl http://127.0.0.1:4173/state` returns `status`, `mode`, `source`, and after a run `phases`, `view` and the event count.
+2. **Graph**: with the admin password from `argus/.env`, run a read query against the twin, for example the call edges with their retries:
+
+   ```bash
+   docker exec -e REDISCLI_AUTH="$(grep ARGUS_ADMIN_PASSWORD .env | cut -d= -f2)" argus-falkordb redis-cli GRAPH.QUERY twin "MATCH (a:Service)-[c:CALLS]->(b:Service) RETURN a.name, b.name, c.retries ORDER BY a.name"
+   ```
+
+   (That is a bash command, for Git Bash on Windows, macOS or Linux; in PowerShell pass the password with `-e REDISCLI_AUTH=<value from .env>` instead.) The queries in section 7 of this README can be run the same way. In the UI, every evidence line opens its Cypher under "▸ query".
+3. **RED**: start a run and follow the RED chapter: the amplifier query result, each `simulate` with its sustained count, the committed scenario with its evidence path and the server's independent re-check (the "ARGUS re-checked it independently" line).
+4. **BLUE**: the what-if cards are the real futures (`FUTURE_EVALUATION_COMPLETED` events): intervention set, verdict, recovered rollouts, median bad ticks, cost.
+5. **Selected intervention and verification**: the chosen card, the "checked N other possible fixes; none cheaper works" line (the audit count), the hardening lines (what changed, on which graph), and the YAML diff in the terminal demo's output.
+6. **Predicted versus observed**: the "Predicted N bad moments, observed M" line after hardening; `WORLD_OBSERVATION` events carry `predicted_viol_ticks_p50`, `predicted_p10`, `predicted_p90`, `observed_viol_ticks`, `within_band`.
+7. **Provenance**: the badge, the provenance line, `/state.phases`, `TAKEOVER` events, and `by` on each call. In live mode compare your run's `phases` with the recorded cassette's `provenance`.
+8. **Logs, reset and replay**: the server prints its start banner (mode, source, model and ceiling in live mode) and every refused control with its reason to its terminal; press `O` for Reset and Replay (Replay re-plays the presentation of the same session without re-running anything); `Run again` starts a fresh session. The test suites are `npm test`, `npm run test:ai` (offline, mock provider, no network) and `npm run test:ai:e2e`; run them one at a time, never two against the same FalkorDB.
+
+### Step 8 — Troubleshooting and cleanup
+
+- **FalkorDB not running or unreachable** (`ECONNREFUSED`, `cannot connect to FalkorDB as admin`): start Docker, then `npm run db:up`. If the container was recreated with a different password, `npm run db:up` re-bootstraps it; if `.env` is missing, the scripts print `ARGUS_AGENT_PASSWORD is not set (run npm run env:init)`; a bare `NOAUTH` from a client means the script was run without the npm wrapper that loads `.env`.
+- **Missing or invalid API key / model**: a missing variable stops live mode with exit code 3 and a clear message; an invalid key, an unknown or unavailable model, or a rate limit surfaces as a `TAKEOVER` with reason `llm_error` and the HTTP status in its detail, after which B5 finishes the phase. Check the model id on openrouter.ai and your account's access.
+- **Timeouts or unusable responses**: reason `turn_ceiling` means a turn exceeded the ceiling (raise `--ceiling-ms`); `consecutive_rejects` means the model's replies could not be used as tool calls (try a model with reliable tool calling). Both are reliability behaviour, not errors to suppress.
+- **B5 fallback activation** is expected whenever one of the listed conditions occurs; the UI labels it. Do not edit the takeover thresholds, budgets or the decision rule to make more phases look model-decided.
+- **Port conflicts**: the UI defaults to 4173 (`npm run ui -- --port 4200`); the terminal demo's event server defaults to 4000 (`--port` or `ARGUS_PORT`); FalkorDB is mapped to 6379 in `docker-compose.yml`, so stop any other Redis on that port or change the mapping and set `ARGUS_FALKORDB_PORT`.
+- **Dependency installation failures**: check `node --version` (22.9 or newer; an older Node reports `bad option: --env-file-if-exists`), delete `argus/node_modules` and run `npm ci` again.
+- **Stopping**: `Ctrl+C` in the server's terminal shuts the server and its MCP children down cleanly; then `npm run db:down`.
+- Never commit `.env` or paste the key anywhere; never disable the budgets, the audit or the takeover rules to force more LLM activity.
 
 ---
 
