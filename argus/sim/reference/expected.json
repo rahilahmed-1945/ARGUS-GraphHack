@@ -1,0 +1,285 @@
+{
+  "_source": "docs/ARGUS_FINAL_ARCHITECTURE.md sections 8.3 and 8.4 (canonical a032 values). Only values stated numerically in the spec are listed.",
+  "P1_prng_seed1001": {
+    "expected": [
+      606341916,
+      1148489751,
+      477154826,
+      1429770400
+    ],
+    "ref": "P.1 / Assumptions"
+  },
+  "R1_3_degrade_ledger_db_sustained": {
+    "expected": 15,
+    "ref": "R1.3"
+  },
+  "R1_2_degrade_payments_sustained": {
+    "expected": 0,
+    "ref": "R1.2 / 9.6"
+  },
+  "R1_2_other_singles_max_sustained": {
+    "expected": 0,
+    "ref": "R1.2 (all 0/16 at tag 101)"
+  },
+  "R1_4_gateway_goodput_max_ticks_2_29": {
+    "expected": 0.0,
+    "ref": "R1.4 goodput 0.0 from tick 2"
+  },
+  "R1_4_payments_served_ticks_2_29": {
+    "expected": 704,
+    "check": "all_eq",
+    "ref": "R1.4 payments pinned at 704"
+  },
+  "R1_5_gateway_goodput_max_ticks_30_39": {
+    "expected": 0.0,
+    "ref": "R1.5 goodput 0.0 ticks 30-39"
+  },
+  "F0_p_recover": {
+    "expected": 0,
+    "ref": "R1.6 / 8.4 F0"
+  },
+  "F0_median": {
+    "expected": 60,
+    "ref": "8.4 F0"
+  },
+  "F0_world_viol": {
+    "expected": 60,
+    "ref": "R1.5 (60 more ticks, no intervention)"
+  },
+  "F0_entry_median_gw_mgw": {
+    "expected": [
+      60,
+      0
+    ],
+    "ref": "H.1"
+  },
+  "F1_p_recover": {
+    "expected": 0,
+    "ref": "R1.6 / 8.4 F1"
+  },
+  "F1_median": {
+    "expected": 60,
+    "ref": "8.4 F1"
+  },
+  "F1_entry_median_gw_mgw": {
+    "expected": [
+      60,
+      0
+    ],
+    "ref": "H.1 (+50% payments)"
+  },
+  "F2_p_recover": {
+    "expected": 0,
+    "ref": "R1.6 / 8.4 F2"
+  },
+  "F2_median": {
+    "expected": 60,
+    "ref": "8.4 F2"
+  },
+  "F3_p_recover": {
+    "expected": 2,
+    "ref": "R1.7 / 8.4 F3"
+  },
+  "F3_median": {
+    "expected": 60,
+    "ref": "8.4 F3"
+  },
+  "F4_p_recover": {
+    "expected": 16,
+    "ref": "R1.8 / 8.4 F4"
+  },
+  "F4_median": {
+    "expected": 14,
+    "ref": "R1.8 / 8.4 F4"
+  },
+  "F4_p10_p90": {
+    "expected": [
+      14,
+      14
+    ],
+    "ref": "8.4 F4"
+  },
+  "F4_world_viol": {
+    "expected": 14,
+    "ref": "R1.8 / 8.4 F4"
+  },
+  "F4_entry_median_gw_mgw": {
+    "expected": [
+      14,
+      0
+    ],
+    "ref": "H.1"
+  },
+  "F5_p_recover": {
+    "expected": 16,
+    "ref": "R1.9 / 8.4 F5"
+  },
+  "F5_median": {
+    "expected": 2,
+    "ref": "R1.9 / 8.4 F5"
+  },
+  "F5_p10_p90": {
+    "expected": [
+      1,
+      3
+    ],
+    "ref": "R1.9 / 8.4 F5 (corrected 2026-10-07, nearest-rank; see spec changelog)"
+  },
+  "F5_world_viol": {
+    "expected": 3,
+    "ref": "R1.9 / 8.4 F5"
+  },
+  "F5_entry_median_gw_mgw": {
+    "expected": [
+      2,
+      0
+    ],
+    "ref": "H.1"
+  },
+  "R1_13_p_recover": {
+    "expected": 16,
+    "ref": "R1.13"
+  },
+  "R1_13_median": {
+    "expected": 4.5,
+    "ref": "R1.13"
+  },
+  "R1_13_world_viol": {
+    "expected": 10,
+    "ref": "R1.13"
+  },
+  "R1_12_payments_cap_mean": {
+    "expected": 708.9,
+    "ref": "R1.12"
+  },
+  "R1_12_payments_n": {
+    "expected": 41,
+    "ref": "R1.12"
+  },
+  "R1_12_payments_se": {
+    "expected": 5.3,
+    "ref": "R1.12"
+  },
+  "R1_12_payments_cap_sd_abs": {
+    "expected": 21.3,
+    "ref": "R1.12 (3% floor)"
+  },
+  "R1_12_ledger_db_result": {
+    "expected": null,
+    "ref": "R1.12 (n = 6 < 10, unchanged)"
+  },
+  "R2_3_singles_max_sustained": {
+    "expected": 0,
+    "ref": "R2.3"
+  },
+  "R2_4_ledger_db_plus_CE42_sustained": {
+    "expected": 16,
+    "ref": "R2.4"
+  },
+  "G0_p_recover": {
+    "expected": 0,
+    "ref": "R2.5 / 8.4 G0"
+  },
+  "G0_median": {
+    "expected": 89.5,
+    "ref": "8.4 G0"
+  },
+  "G0_world_viol": {
+    "expected": 89,
+    "ref": "R2.6"
+  },
+  "G0_entry_median_gw_mgw": {
+    "expected": [
+      89.5,
+      89
+    ],
+    "ref": "H.1"
+  },
+  "G1_p_recover": {
+    "expected": 16,
+    "ref": "R2.5 / 8.4 G1"
+  },
+  "G1_median": {
+    "expected": 32.5,
+    "ref": "R2.5 / 8.4 G1"
+  },
+  "G1_p10_p90": {
+    "expected": [
+      20,
+      33
+    ],
+    "ref": "8.4 G1 (corrected 2026-10-07, nearest-rank; see spec changelog)"
+  },
+  "G1_world_viol": {
+    "expected": 32,
+    "ref": "R2.6"
+  },
+  "G1_entry_median_gw_mgw": {
+    "expected": [
+      32.5,
+      32
+    ],
+    "ref": "H.1"
+  },
+  "G2_p_recover": {
+    "expected": 16,
+    "ref": "R2.5 / 8.4 G2"
+  },
+  "G2_median": {
+    "expected": 30.5,
+    "ref": "R2.5 / 8.4 G2"
+  },
+  "G2_p10_p90": {
+    "expected": [
+      19,
+      32
+    ],
+    "ref": "8.4 G2 (corrected 2026-10-07, nearest-rank; see spec changelog)"
+  },
+  "G2_world_viol": {
+    "expected": 31,
+    "ref": "R2.6"
+  },
+  "G2_entry_median_gw_mgw": {
+    "expected": [
+      16.5,
+      28
+    ],
+    "ref": "H.1"
+  },
+  "G3_p_recover": {
+    "expected": 16,
+    "ref": "R2.5 / 8.4 G3"
+  },
+  "G3_median": {
+    "expected": 0,
+    "ref": "R2.5 / 8.4 G3"
+  },
+  "G3_p10_p90": {
+    "expected": [
+      0,
+      0
+    ],
+    "ref": "8.4 G3"
+  },
+  "G3_world_viol": {
+    "expected": 0,
+    "ref": "R2.6"
+  },
+  "G3_entry_median_gw_mgw": {
+    "expected": [
+      0,
+      0
+    ],
+    "ref": "H.1"
+  },
+  "R2_8_world_trigger_alone_viol": {
+    "expected": 32,
+    "ref": "R2.8"
+  },
+  "R2_8_world_trigger_alone_recovered": {
+    "expected": true,
+    "ref": "R2.8 (heals)"
+  },
+  "_percentile": "p10/p90 = nearest-rank on sorted per-rollout violation ticks: v[ceil(q*n)-1] (spec section 10.6)"
+}

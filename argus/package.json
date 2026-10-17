@@ -1,0 +1,36 @@
+{
+  "name": "argus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ARGUS: graph-grounded counterfactual hardening on FalkorDB (spec: docs/ARGUS_FINAL_ARCHITECTURE.md)",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "env:init": "node scripts/init-env.js",
+    "db:up": "node scripts/init-env.js && docker compose up -d --wait && node --env-file-if-exists=.env graph/acl.js",
+    "db:down": "docker compose down",
+    "acl": "node --env-file-if-exists=.env graph/acl.js",
+    "reset": "node --env-file-if-exists=.env graph/reset.js",
+    "ref": "python sim/reference/reproduce.py",
+    "probe": "node --env-file-if-exists=.env scripts/probe.js",
+    "demo": "node --env-file-if-exists=.env scripts/demo.js",
+    "test": "node --env-file-if-exists=.env --test --test-concurrency=1",
+    "ui": "node --env-file-if-exists=.env app/ui-server.js",
+    "ui:live": "node --env-file-if-exists=.env app/ui-server.js --mode live",
+    "test:ai": "node --env-file-if-exists=.env --test --test-concurrency=1 tests/ai/ai-offline.test.js",
+    "test:ai:e2e": "node --env-file-if-exists=.env --test --test-concurrency=1 tests/ai/ai-e2e.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "falkordb": "6.8.0",
+    "js-yaml": "5.4.3",
+    "redis": "5.12.1",
+    "socket.io": "4.8.3",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "4.8.3"
+  }
+}

@@ -1,0 +1,14 @@
+# ARGUS FalkorDB. Pinned to the exact image verified by the M1 feature probe
+# (graph module ver 60001 = FalkorDB 6.0.1, Redis 8.10.2).
+# No persistence volume: every demo and test starts from `npm run reset`.
+services:
+  falkordb:
+    image: falkordb/falkordb:6.0.1@sha256:e2765e207e5ba4ee90e47ed31eb7491ad6dd3d42241c326e429375c02ad9882f
+    container_name: argus-falkordb
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "PING"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

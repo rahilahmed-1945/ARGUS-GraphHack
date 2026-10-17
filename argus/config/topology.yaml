@@ -1,0 +1,93 @@
+# ARGUS canonical seed topology — the SINGLE source of seed data for both graphs.
+# Spec: docs/ARGUS_FINAL_ARCHITECTURE.md §8.1 (topology), §5 (schema), §6.3 (rules), §5.2 Round.
+# Every value here must equal the verbatim reference simulator (sim/reference/sim_reference.py,
+# base_model); tests/topology.test.js enforces that.
+#
+# Units: rps for rates/capacity, ms for latency/timeouts, seconds for queue_s.
+# cap_sd is a FRACTION of cap_mean (spec §3.8 IMPL-NOTE): 0.05 = 5%.
+
+services:            # twin values; `world` differs only via world_overrides
+  - { name: gateway,   entry: true,  ext_rps: 300, cap_mean: 5000, cap_sd: 0.05, base_ms: 20, queue_s: 2.0, shed: 0 }
+  - { name: mobile-gw, entry: true,  ext_rps: 150, cap_mean: 5000, cap_sd: 0.05, base_ms: 20, queue_s: 2.0, shed: 0 }
+  - { name: auth,      entry: false, ext_rps: 0,   cap_mean: 1500, cap_sd: 0.05, base_ms: 30, queue_s: 2.0, shed: 0 }
+  - { name: checkout,  entry: false, ext_rps: 0,   cap_mean: 2000, cap_sd: 0.05, base_ms: 40, queue_s: 2.0, shed: 0 }
+  - { name: orders,    entry: false, ext_rps: 0,   cap_mean: 1000, cap_sd: 0.05, base_ms: 40, queue_s: 2.0, shed: 0 }
+  - { name: payments,  entry: false, ext_rps: 0,   cap_mean: 800,  cap_sd: 0.15, base_ms: 80, queue_s: 2.0, shed: 0 }
+  - { name: inventory, entry: false, ext_rps: 0,   cap_mean: 4000, cap_sd: 0.05, base_ms: 30, queue_s: 2.0, shed: 0 }
+  - { name: ledger-db, entry: false, ext_rps: 0,   cap_mean: 550,  cap_sd: 0.05, base_ms: 20, queue_s: 2.0, shed: 0 }
+
+calls:
+  defaults: { breaker: false, trip_p: 0.5, trip_ticks: 5, cooldown: 10 }
+  edges:
+    - { caller: gateway,   callee: auth,      fanout: 1,   retries: 1, timeout_ms: 300 }
+    - { caller: gateway,   callee: checkout,  fanout: 1,   retries: 2, timeout_ms: 1000 }
+    - { caller: mobile-gw, callee: auth,      fanout: 1,   retries: 1, timeout_ms: 300 }
+    - { caller: mobile-gw, callee: orders,    fanout: 1,   retries: 0, timeout_ms: 1000 }
+    - { caller: checkout,  callee: payments,  fanout: 1,   retries: 3, timeout_ms: 500 }
+    - { caller: checkout,  callee: inventory, fanout: 1,   retries: 1, timeout_ms: 300 }
+    - { caller: orders,    callee: ledger-db, fanout: 2,   retries: 0, timeout_ms: 300 }
+    - { caller: orders,    callee: inventory, fanout: 1,   retries: 1, timeout_ms: 300 }
+    - { caller: payments,  callee: ledger-db, fanout: 0.2, retries: 0, timeout_ms: 300 }
+
+# Pending deploys. MODIFIES points to the CALLER (whose config the deploy edits); `callee` names the edge target.
+change_events:
+  - { id: CE-42, field: retries, new_value: 3, status: pending, caller: orders,   callee: ledger-db }
+  - { id: CE-17, field: retries, new_value: 3, status: pending, caller: checkout, callee: inventory }
+
+# Initial snapshot-state properties, written explicitly so no property is ever null (spec §5.1).
+initial_state:
+  service: { q_est: 0 }
+  calls:   { p_est: 0, hot_est: 0, open_ticks_est: 0 }
+
+# The `world` graph is the twin with exactly these differences (spec §3.6).
+world_overrides:
+  all_services: { cap_sd: 0 }
+  services:
+    payments: { cap_mean: 704 }
+
+# Action-space rule parameters (spec §6.3). Rules generate Fault/Intervention nodes from the topology.
+faults:
+  cap_degrade: { id_prefix: degrade, magnitude: 0.6, persistence: transient,  cost_to_attacker: 1 }   # every non-entry service
+  surge:       { id_prefix: surge,   magnitude: 1.4, persistence: transient,  cost_to_attacker: 1 }   # every entry service
+  deploy:      { id_prefix: deploy,                 persistence: persistent, cost_to_attacker: 1 }   # every pending ChangeEvent
+
+interventions:
+  retries_off:  { cost: 1 }   # every CALLS with retries >= 1
+  cap_retries:  { cost: 1, factor: 1 }   # every CALLS with retries > 1 (factor = new cap)
+  breaker:      { cost: 2 }   # every CALLS without a breaker
+  scale_out:    { cost: 3, factor: 1.5 }   # every non-entry service
+  shed:         { cost: 4, factor: 0.10 }   # every entry service
+  block_deploy: { cost: 1 }   # every pending ChangeEvent
+
+# (:Round {n:1}) — budgets, the explicit safety constraint and the SLO (spec §5.2).
+# red_tool_budget / blue_tool_budget: build-readiness decision A#7 (spec's tool_budget = 14 per role per round).
+round:
+  n: 1
+  sim_budget: 6
+  fork_budget: 6
+  red_tool_budget: 14
+  blue_tool_budget: 14
+  autopilot_reserve: 3
+  audit_sims: 0
+  mode: stage
+  error_budget: 10
+  rec_threshold: 15
+  t_off: 30
+  horizon_reactive: 60
+  horizon_preemptive: 90
+  slo_goodput: 0.99
+  slo_latency_ms: 800
+  slo_width_ms: 80
+  arrival_noise: 0.05
+  obs_noise: 0.05
+
+# Indices (build-readiness decision A#23). GRAPH.COPY copies indices into forks.
+indexes:
+  - { label: Service,      property: name }
+  - { label: ChangeEvent,  property: id }
+  - { label: Fault,        property: id }
+  - { label: Intervention, property: id }
+  - { label: Round,        property: n }
+  - { label: Scenario,     property: id }
+  - { label: Future,       property: id }
+  - { label: Charge,       property: id }

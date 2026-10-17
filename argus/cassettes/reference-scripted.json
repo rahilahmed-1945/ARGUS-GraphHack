@@ -1,0 +1,215 @@
+{
+  "format": "argus.cassette/v1",
+  "key": "sha256(canonical {role, round, turn, history})",
+  "source": "deterministic scripted test models (tests/fixtures/red-model.js, blue-model.js) — not a real LLM recording",
+  "entries": {
+    "0efe5056983ba579812f3ced95c12df7b710f73accc14222876f3527674d0e65": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db",
+          "deploy:CE-42"
+        ]
+      }
+    },
+    "13c6dd8615b6f71fd2f7eca1445b7b0ce20c265c327994d20341d68073f97ae4": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:payments"
+        ]
+      }
+    },
+    "3fcb260abdc45b91a5993da9ecaf701813a5c1277f6b665fb09656840880bbf8": {
+      "tool": "commit",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db"
+        ],
+        "evidence_path": [
+          "gateway",
+          "checkout",
+          "payments",
+          "ledger-db"
+        ]
+      }
+    },
+    "4a96494e37a8132de3ae04ec41fb392ec7dddbc0000ace66e436e2a023011da5": {
+      "calls": [
+        {
+          "tool": "amplification_paths",
+          "args": {
+            "min_risk": 2
+          }
+        },
+        {
+          "tool": "list_candidates",
+          "args": {}
+        }
+      ]
+    },
+    "6425b5a366a1e08a9410c8c6e50a88df2cecd2ada7b95d3247f65fc4222e13f7": {
+      "calls": [
+        {
+          "tool": "amplification_paths",
+          "args": {
+            "min_risk": 2
+          }
+        },
+        {
+          "tool": "list_candidates",
+          "args": {}
+        }
+      ]
+    },
+    "737a4d76d36aa11aa00e3cc512fc08b830b95acdb9972fdab045c254c16b2e36": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db"
+        ]
+      }
+    },
+    "7fd6374d0f54196a7ef360e7c9294b4e0fd280dbb74c5c72294ea8e1163f15f1": {
+      "tool": "commit",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db",
+          "deploy:CE-42"
+        ],
+        "evidence_path": [
+          "orders",
+          "ledger-db"
+        ]
+      }
+    },
+    "8618369b0e7fa8db3aff62ec984bd9db9d8f6f7d27fbb78ccebbd6369a8df823": {
+      "tool": "query_graph",
+      "args": {
+        "cypher": "MATCH (c:ChangeEvent {status:'pending'})-[m:MODIFIES]->(a:Service)-[:CALLS]->(b:Service {name:$s})\nWHERE m.callee = b.name RETURN c.id AS ce, a.name AS caller, b.name AS target ORDER BY ce",
+        "params": {
+          "s": "ledger-db"
+        }
+      }
+    },
+    "a01e56ec88a53f48fc854e8da6bb26ca1b6507179af98bd9bc816a7b38b96da2": {
+      "calls": [
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": [
+              "retries_off:checkout>payments"
+            ]
+          }
+        },
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": [
+              "breaker:checkout>payments"
+            ]
+          }
+        },
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": [
+              "retries_off:checkout>payments",
+              "retries_off:gateway>checkout"
+            ]
+          }
+        }
+      ]
+    },
+    "aa37fe54afc5d457918c0568c14e6cf327d4f0c4d05f202bdb71295e2a5965d4": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db"
+        ]
+      }
+    },
+    "abae0f5ee167e958f78a1fecc1d6f255c822af3294db80c172dc4d4a4c6663b9": {
+      "tool": "commit",
+      "args": {
+        "future_id": "fork:R1:retries_off:checkout>payments+retries_off:gateway>checkout",
+        "rationale": "cheapest future that recovers within the error budget"
+      }
+    },
+    "ac7d293fd19022e4a1075883b281c0b1f31caed110a992d3f6763afc82fd6191": {
+      "tool": "list_candidates",
+      "args": {}
+    },
+    "b72d8844083b3158c4f7542e52d672554d11c07783455f40839feb93d50669cc": {
+      "tool": "rank_nodes",
+      "args": {
+        "metric": "pagerank"
+      }
+    },
+    "be23d33faedfe7fb1a0223dec30688d47f7117afa53b01a74231218d5934a48b": {
+      "calls": [
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": []
+          }
+        },
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": [
+              "scale_out:payments"
+            ]
+          }
+        },
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": [
+              "scale_out:ledger-db"
+            ]
+          }
+        }
+      ]
+    },
+    "d5072b500be36245c7c03a69c86deb6f2327b40bf0c5448b6ee175a6112e90ef": {
+      "calls": [
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": [
+              "block_deploy:CE-42"
+            ]
+          }
+        },
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": [
+              "breaker:orders>ledger-db"
+            ]
+          }
+        },
+        {
+          "tool": "fork_and_simulate",
+          "args": {
+            "intervention_ids": [
+              "scale_out:ledger-db"
+            ]
+          }
+        }
+      ]
+    },
+    "ec621dc58d051d4063937fb06d8046e3acc667166772163bde583eb56d4dbb17": {
+      "tool": "list_candidates",
+      "args": {}
+    },
+    "f30186412cad55fe0ef4366c2593a96b916b253e8d7f1141b6c90044470204ef": {
+      "tool": "commit",
+      "args": {
+        "future_id": "fork:R2:scale_out:ledger-db",
+        "rationale": "cheapest future that recovers within the error budget"
+      }
+    }
+  }
+}

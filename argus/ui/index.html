@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARGUS Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="importmap">
+    { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+  </script>
+</head>
+<body data-status="standby" data-actor="none">
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <div class="mark">ARGUS</div>
+        <div class="tag">Autonomous Counterfactual Intelligence</div>
+      </div>
+      <div class="stage" id="stage">
+        <div class="stage-round" id="stage-round">STANDBY</div>
+        <div class="stage-title"><span class="stage-actor" id="stage-actor"></span><span id="stage-title">ARGUS IS READY</span></div>
+        <div class="stage-sub" id="stage-sub">Waiting for the runtime</div>
+        <div class="progress" id="progress-steps"></div>
+      </div>
+      <!-- story modes: the chapter in plain words, and where it sits in the causal chain -->
+      <div class="story-head story-only">
+        <div id="chapter-title" class="chapter-title"></div>
+        <ol id="chain" class="chain" aria-label="The causal chain"></ol>
+      </div>
+      <div class="status" id="status">
+        <div class="status-k">SYSTEM STATUS</div>
+        <div class="status-v"><span class="status-dot"></span><span id="status-text">STANDBY</span></div>
+        <div class="belief" aria-label="World realized state and twin belief">
+          <div class="bl-row"><span class="bl-k">WORLD</span><span id="world-seg" class="bl-seg"></span><span id="world-tick" class="bl-tick"></span><span id="world-entries" class="bl-entries"></span></div>
+          <div class="bl-row"><span class="bl-k">TWIN</span><span id="twin-cal" class="bl-cal"></span><span id="twin-clock" class="bl-clock"></span></div>
+        </div>
+        <button id="voice-toggle" class="voice-toggle story-only" aria-pressed="true">&#128266;&nbsp; Narration on</button>
+      </div>
+    </header>
+
+    <main class="hero">
+      <div class="atmo"></div>
+      <div id="twin" class="twin"></div>
+
+      <div id="banner" class="banner"><div id="banner-k" class="b-k"></div><div id="banner-title" class="b-title"></div><div id="banner-sub" class="b-sub"></div></div>
+
+      <section id="futures" class="futures" aria-label="Counterfactual futures">
+        <div class="fx-root"><span class="fx-root-k" id="fx-mode">COUNTERFACTUAL FUTURES</span><span class="fx-root-v">CURRENT SYSTEM</span><span class="fx-root-sub" id="fx-root-sub"></span></div>
+        <svg id="fx-links" class="fx-links"></svg>
+        <div id="fx-cards" class="fx-cards"></div>
+      </section>
+
+      <!-- story modes: the six questions (left), what-if futures (bottom), evidence (right), the closing frame -->
+      <aside id="story" class="story story-only" aria-live="polite">
+        <div class="sp-k">THE PROBLEM</div>
+        <div id="story-problem" class="sp-problem"></div>
+        <div id="story-rows" class="story-rows"></div>
+        <div id="story-actions" class="story-actions"></div>
+        <div id="cast-legend" class="cast-legend" aria-label="Who is who"></div>
+      </aside>
+      <section id="whatif" class="whatif story-only" aria-live="polite"></section>
+      <aside id="evidence" class="evidence story-only" aria-label="Evidence">
+        <div class="ev-h"><b>EVIDENCE</b><span>Every line is a real FalkorDB query, graph copy or write. Open ▸ query for the details.</span></div>
+        <ol id="ev-list" class="ev-list"></ol>
+        <div id="ev-empty" class="ev-empty">Nothing yet.</div>
+      </aside>
+      <section id="final" class="final story-only" aria-live="polite"></section>
+
+      <div id="standby" class="standby">
+        <div class="sb-mark">ARGUS</div>
+        <h1 class="sb-hero">WHAT IF YOUR SYSTEM COULD FIND ITS OWN NEXT FAILURE — BEFORE THE OUTAGE?</h1>
+        <div class="sb-line">ARGUS keeps a live graph of your system, attacks a copy of it to find the next failure, and proves the smallest fix that prevents it, before anything breaks.</div>
+        <div class="sb-choices">
+          <button id="start-control" class="choice-cta"><b>CONTROL THE SYSTEM</b><span>Interactively change the graph and watch ARGUS adapt.</span><small>~4 MIN · YOU MAKE TWO DECISIONS · NARRATED</small></button>
+          <button id="start-demo" class="choice-cta"><b>GUIDED DEMO</b><span>A 4-minute guided explanation.</span><small>~4 MIN · HANDS-FREE · NARRATED</small></button>
+        </div>
+        <div class="sb-hint">Nothing starts until you choose.</div>
+      </div>
+
+      <section id="intro" class="intro" aria-live="polite"><div id="intro-kicker" class="i-k"></div><div id="intro-text" class="i-text"></div><div id="intro-dots" class="i-dots"></div></section>
+
+      <div class="controls">
+        <span id="conn" class="conn"></span>
+        <button id="btn-run" class="primary">Run</button>
+        <button id="btn-pause">Pause</button>
+        <button id="btn-speed">1×</button>
+        <button id="btn-replay">Replay</button>
+        <button id="btn-reset">Reset</button>
+        <span class="meta"><span id="engine">—</span><span id="progress">no events</span></span>
+      </div>
+      <div class="provenance" id="source"></div>
+    </main>
+
+    <footer class="deck">
+      <section class="panel activity">
+        <div class="ph">LIVE AGENT ACTIVITY</div>
+        <ol id="activity-list" class="act-list"></ol>
+        <div id="activity-empty" class="placeholder">The agents' tool calls appear here</div>
+      </section>
+      <section class="panel decision">
+        <div class="ph">CURRENT DECISION</div>
+        <div id="decision-body" class="decision-body"></div>
+      </section>
+    </footer>
+  </div>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

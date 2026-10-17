@@ -1,0 +1,13 @@
+node_modules
+.env
+.env.*
+!.env.example
+out
+tests/**/*.test.js
+tests/ai
+tests/helpers.js
+sim/reference
+cassettes/recorded-*.json
+*.log
+m9-*.mjs
+.git

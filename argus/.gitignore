@@ -1,0 +1,4 @@
+.env
+out/
+cassettes/recorded-*.json
+!.env.example

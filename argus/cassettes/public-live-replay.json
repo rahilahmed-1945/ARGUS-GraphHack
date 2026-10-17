@@ -1,0 +1,226 @@
+{
+  "format": "argus.cassette/v1",
+  "key": "sha256(canonical {role, round, turn, history})",
+  "source": "live OpenRouter run (UI)",
+  "provenance": {
+    "live": true,
+    "provider": "openrouter",
+    "model": "cohere/north-mini-code:free",
+    "ceiling_ms": 30000,
+    "phases": [
+      {
+        "role": "red",
+        "round": 1,
+        "proposedBy": "b5",
+        "takeover": {
+          "reason": "max_turn",
+          "turn": 8,
+          "detail": "turn 8 without a commit"
+        },
+        "turns": 8,
+        "transport": "mcp"
+      },
+      {
+        "role": "blue",
+        "round": 1,
+        "proposedBy": "b5",
+        "takeover": {
+          "reason": "no_progress",
+          "turn": 6,
+          "detail": "4 fork_and_simulate calls without a qualifying result"
+        },
+        "turns": 6,
+        "transport": "mcp"
+      },
+      {
+        "role": "red",
+        "round": 2,
+        "proposedBy": "llm",
+        "takeover": null,
+        "turns": 6,
+        "transport": "mcp"
+      },
+      {
+        "role": "blue",
+        "round": 2,
+        "proposedBy": "b5",
+        "takeover": {
+          "reason": "turn_ceiling",
+          "turn": 3,
+          "detail": "turn exceeded 30000 ms"
+        },
+        "turns": 3,
+        "transport": "mcp"
+      }
+    ],
+    "late_decisions": 0
+  },
+  "entries": {
+    "01f21bb9aeae24f7785cd53272f18befade7b408406acc1b840d3877393206f2": {
+      "tool": "fork_and_simulate",
+      "args": {
+        "intervention_ids": [
+          "breaker:checkout>payments",
+          "breaker:gateway>checkout"
+        ]
+      }
+    },
+    "19882446c763a982bf6ca6c40d33da860cabd292b4df2e7c6695cd295fe99a64": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:payments",
+          "surge:gateway"
+        ]
+      }
+    },
+    "232f2d743bdff3cdd6a77aabe393144bece7b5b465d661acb82e9a81a57fa5a3": {
+      "tool": "query_graph",
+      "args": {
+        "cypher": "MATCH (ce:ChangeEvent {status: 'pending'})-[m:MODIFIES]->(caller:Service)-[:CALLS]->(callee:Service) WHERE m.callee = callee.name AND callee.name = 'ledger-db' RETURN ce.id, caller.name AS caller, callee.name AS callee, ce.field, ce.new_value"
+      }
+    },
+    "47c87f109348036961aebef99ab3b5dd6a65e7123d7790c1c8ea3c0e89ff230f": {
+      "tool": "fork_and_simulate",
+      "args": {
+        "intervention_ids": [
+          "retries_off:checkout>payments"
+        ]
+      }
+    },
+    "4a96494e37a8132de3ae04ec41fb392ec7dddbc0000ace66e436e2a023011da5": {
+      "tool": "list_candidates",
+      "args": {}
+    },
+    "6425b5a366a1e08a9410c8c6e50a88df2cecd2ada7b95d3247f65fc4222e13f7": {
+      "tool": "list_candidates",
+      "args": {}
+    },
+    "651dbed4e97bc7fe00fef918fd603e866897c77afd15bad9c195ca9cc30b0ea8": {
+      "tool": "fork_and_simulate",
+      "args": {
+        "intervention_ids": [
+          "cap_retries:checkout>payments"
+        ]
+      }
+    },
+    "674078ff6c4db36f32c697de0265b2576eba97c74ecc424ebed93d35800831cc": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db"
+        ]
+      }
+    },
+    "82e20aedda8ad90ff82726fef5d95c6264a2a0197278bb9f3c75ab36344f0db1": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:payments"
+        ]
+      }
+    },
+    "8d2c31255b24afc10be864c03b3946f65c3542a3b963d52b36b5febda38001ed": {
+      "tool": "query_graph",
+      "args": {
+        "cypher": "MATCH (s:Service) RETURN s.name, s.entry, s.cap_mean"
+      }
+    },
+    "95e54da1475faeee2389b445fd7f0b292b44b9c24e3ade11d988f5e642848c8c": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db",
+          "deploy:CE-42"
+        ]
+      }
+    },
+    "967301fc7a586ae8d84cb64500aba45d556f2fc68a0c2ad860dd6b44a2e89c2e": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:payments",
+          "deploy:CE-17"
+        ]
+      }
+    },
+    "a7e3e10c4da73c59d818c9fb81dce219a8f6eadf4209ea0260caf2bc67ad9e10": {
+      "tool": "query_graph",
+      "args": {
+        "cypher": "MATCH (ce:ChangeEvent {status: 'pending'})-[m:MODIFIES]->(caller:Service)-[:CALLS]->(callee:Service) WHERE m.callee = callee.name AND callee.name = 'payments' RETURN ce.id, m.callee AS changed_edge_callee, caller.name AS caller, callee.name AS callee, ce.field, ce.new_value"
+      }
+    },
+    "ac7d293fd19022e4a1075883b281c0b1f31caed110a992d3f6763afc82fd6191": {
+      "tool": "list_candidates",
+      "args": {
+        "scope": "S:R2"
+      }
+    },
+    "ac96168496254d83dc659452a3a93e019da5fe880a8cedf01b5f3e7a87ffbf12": {
+      "tool": "amplification_paths",
+      "args": {
+        "min_risk": 0
+      }
+    },
+    "b52f53d0ad843c1ba802800d854871e43c33a59c8dd955943f9faafc6b1bffe9": {
+      "tool": "simulate",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db"
+        ]
+      }
+    },
+    "bc76c9a93fb8c62bba6dafe3bd9c0fb134981ffd456333291bbc52a45a8c9cab": {
+      "tool": "amplification_paths",
+      "args": {
+        "min_risk": 0
+      }
+    },
+    "c0626aac97f0c0f7ddc825d62b87b40b859ee8c8a09fb12d7dd1457f0ef8db9f": {
+      "tool": "commit",
+      "args": {
+        "fault_ids": [
+          "degrade:ledger-db",
+          "deploy:CE-42"
+        ],
+        "evidence_path": [
+          "mobile-gw",
+          "orders",
+          "ledger-db"
+        ]
+      }
+    },
+    "ca3fdbcee88d8f0698b7303075e7d39e9a3e1cad379f6446ab08fe3e981b62b8": {
+      "tool": "amplification_paths",
+      "args": {
+        "min_risk": 0
+      }
+    },
+    "e9bd4778f1daea2d96c1ba08fe1c3bf6483b32e7c97828ba913e2e425ae96efe": {
+      "tool": "fork_and_simulate",
+      "args": {
+        "intervention_ids": [
+          "scale_out:ledger-db"
+        ]
+      }
+    },
+    "ec621dc58d051d4063937fb06d8046e3acc667166772163bde583eb56d4dbb17": {
+      "tool": "list_candidates",
+      "args": {
+        "scope": "S:R1"
+      }
+    },
+    "f4553e48acec2ac31122bc51b6c48c83715db4f646e234619a8dcc115c29e218": {
+      "tool": "amplification_paths",
+      "args": {
+        "min_risk": 0
+      }
+    },
+    "fd41786c6a1b6e434adbea25d642524fe431c011011006c84203781a8330edfb": {
+      "tool": "query_graph",
+      "args": {
+        "cypher": "MATCH (ce:ChangeEvent {status: 'pending'})-[m:MODIFIES]->(caller:Service)-[:CALLS]->(callee:Service) WHERE m.callee = callee.name AND callee.name = 'ledger-db' RETURN ce.id, m.callee AS changed_edge_callee, caller.name AS caller, callee.name AS callee, ce.field, ce.new_value"
+      }
+    }
+  }
+}
