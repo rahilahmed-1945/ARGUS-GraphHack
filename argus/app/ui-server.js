@@ -94,8 +94,11 @@ function within(base, rel) {
  *                                   (`control {action:'start', token}`); anonymous visitors cannot spend the provider quota.
  *                                   Replay, autopilot and the interactive judge demo stay open. The in-process control()
  *                                   API (tests, operator scripts) is trusted and never needs it.
- * @param {number} [o.cooldownMs]    public deployment: minimum gap between lifecycle actions (start/reset/configure) from the
- *                                   same client address; the operator token bypasses it. 0 = off (local default).
+ * @param {number} [o.cooldownMs]    public deployment: minimum gap between two runs STARTED from the same client address; the
+ *                                   operator token bypasses it. 0 = off (local default). Only `start` is rate-limited: reset
+ *                                   and configure are the steps of one interaction (the judge's choice is configure, then
+ *                                   start a few seconds later) and ATTACK AGAIN continues a paused run; none of them may
+ *                                   be refused by the cooldown, or the visitor is left waiting for nothing.
  * @param {number} [o.liveMaxRunsPerDay]  public deployment: cap on live runs per UTC day (free provider quota); Infinity = off.
  */
 export async function startUiServer({ mode = 'replay', cassettePath = join(ROOT, 'cassettes', 'reference-scripted.json'), port = 4173, host = '127.0.0.1',
@@ -142,7 +145,7 @@ export async function startUiServer({ mode = 'replay', cassettePath = join(ROOT,
   // public-deployment guards (all off by default): operator token for live runs, per-client cooldown, daily live-run cap
   const liveRuns = { day: null, count: 0 };
   const liveRunsToday = () => { const day = new Date().toISOString().slice(0, 10); if (liveRuns.day !== day) { liveRuns.day = day; liveRuns.count = 0; } return liveRuns.count; };
-  const lastAction = new Map();            // client address → time of its last lifecycle action
+  const lastStart = new Map();             // client address → time of the last run it started (the cooldown clock)
   const info = () => ({ session, runId: `${instance}-${session}`, status, mode: interactive ? 'interactive' : mode,
     source: interactive ? INTERACTIVE_SOURCE : source, error, awaiting, interactive,
     choices: JUDGE_CHOICES.map(({ id, label, detail }) => ({ id, label, detail })),
@@ -228,21 +231,27 @@ export async function startUiServer({ mode = 'replay', cassettePath = join(ROOT,
     await sendPreview();
   };
 
-  const doRun = async ({ interactive: wantInteractive = false } = {}) => {
+  // onStarted: called once the run is actually under way (status 'running', after any reset) or refused, so a browser's
+  // ack describes the run it asked for (its session, mode and status), never the session that was just torn down
+  const doRun = async ({ interactive: wantInteractive = false, onStarted = () => {} } = {}) => {
     if (live && wantInteractive) {        // never switch a live session to the scripted models: refuse, stay ready
       error = 'the interactive judge demo is not available in live mode';
       setStatus(status);
+      onStarted();
       return;
     }
     if (live && !wantInteractive && liveRunsToday() >= liveMaxRunsPerDay) {   // the free provider quota is shared by every visitor
       error = `the daily limit of ${liveMaxRunsPerDay} live run(s) is reached; the replay of the recorded live run remains available`;
       setStatus(status);
+      onStarted();
       return;
     }
+    error = null;                         // an accepted start: an earlier refusal must not be reported as this run's error
     if (status === 'done' || status === 'failed') await doReset({ keepInteractive: wantInteractive && interactive });
     if (wantInteractive) interactive = true;
     if (live && !interactive) { liveRunsToday(); liveRuns.count += 1; }
     setStatus('running');
+    onStarted();
     try {
       const scripted = interactive;                       // the deterministic reference models (judge demo)
       let recorder = null;
@@ -294,22 +303,32 @@ export async function startUiServer({ mode = 'replay', cassettePath = join(ROOT,
     sendPreview(socket).catch(() => {});
     socket.on('control', (msg, ack) => {
       const action = msg?.action;
-      const done = () => { if (typeof ack === 'function') ack(info()); };
+      const done = (extra = {}) => { if (typeof ack === 'function') ack({ ...info(), ...extra }); };
       const operator = !!operatorToken && tokenOk(msg?.token);
-      const refuse = (why) => { error = why; setStatus(status); done(); };
-      // public guards: a live run needs the operator token; lifecycle actions from one address are rate-limited
-      if (['start', 'reset', 'configure'].includes(action)) {
-        if (action === 'start' && live && !msg?.interactive && operatorToken && !operator) return refuse('live runs require the operator token; the replay of the recorded live run stays available');
+      // a refusal is answered with its reason (the ack and a status payload carry `error`; the status is unchanged) and
+      // logged with the client address, never with a token
+      const refuse = (why, extra = {}) => { error = why; console.warn(`[ui-server] ${action} refused for ${clientAddress(socket)}: ${why}`); setStatus(status); done(extra); };
+      if (action === 'start') {
+        // public guards, on runs only: a live run needs the operator token; one address may start a run once per cooldown
+        if (live && !msg?.interactive && operatorToken && !operator) return refuse('live runs require the operator token; the replay of the recorded live run stays available');
+        if (status === 'running') return done();                                // already running: nothing to start, no error
+        if (status === 'awaiting' && msg?.interactive) return done();           // the judge's own paused run: ATTACK AGAIN continues it
         if (cooldownMs > 0 && !operator) {
           const who = clientAddress(socket);
-          const since = Date.now() - (lastAction.get(who) ?? -Infinity);
-          if (since < cooldownMs) return refuse(`please wait ${Math.ceil((cooldownMs - since) / 1000)} s before the next action`);
-          lastAction.set(who, Date.now());
+          const since = Date.now() - (lastStart.get(who) ?? -Infinity);
+          if (since < cooldownMs) return refuse(`please wait ${Math.ceil((cooldownMs - since) / 1000)} s before starting another run`, { retryAfterMs: cooldownMs - since });
+          lastStart.set(who, Date.now());
         }
-      }
-      if (action === 'start') {
-        if (status === 'running' || status === 'awaiting') return done();
-        enqueue(async () => { const p = doRun({ interactive: !!msg?.interactive }); done(); await p; });
+        // a guided start while a judge run is paused: the paused run is released and finishes, then doRun resets and the
+        // canonical run follows (the ack comes once that run is under way)
+        if (status === 'awaiting') attackAgain();
+        enqueue(async () => {
+          let answered = false;
+          const answer = () => { if (!answered) { answered = true; done(); } };
+          // a failure before the run is under way (e.g. the reset) is reported, never swallowed into a silent "done"
+          await doRun({ interactive: !!msg?.interactive, onStarted: answer }).catch((e) => { error = e.message; setStatus(status); });
+          answer();                                                             // never leave a browser unanswered
+        });
       } else if (action === 'reset') {
         if (release) attackAgain();                              // a paused run is released so it can finish first
         // waits for a running demo to finish first; a failed reset is reported, and the client is always answered
@@ -318,7 +337,8 @@ export async function startUiServer({ mode = 'replay', cassettePath = join(ROOT,
         if (status === 'running' || status === 'awaiting') return done();
         enqueue(async () => { try { await doConfigure(msg?.choice); } catch (e) { error = e.message; setStatus(status); } done(); });
       } else if (action === 'attack-again') {
-        attackAgain();
+        // nothing paused (a stale page, or the run was reset meanwhile): say so instead of silently doing nothing
+        if (!attackAgain()) return refuse('no paused run is waiting for ATTACK AGAIN; press Reset to start again');
         done();
       } else done();
     });

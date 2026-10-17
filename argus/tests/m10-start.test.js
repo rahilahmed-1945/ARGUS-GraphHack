@@ -85,7 +85,10 @@ test('3. one click starts the narration and the canonical run, then playback —
   assert.deepEqual(log.filter(([k]) => k === 'playback'), [['playback', director.introMs]]);
   assert.equal(director.canPlay(), true);
   const main = read('ui/js/main.js');
-  assert.match(main, /\$\('#start-demo'\)\.addEventListener\('click', \(\) => \{\s*enterMode\('guided'\);\s*director\.start\(\);/, 'GUIDED DEMO enables the story and narration, then starts the director');
+  // the click: (any presentation stops, the director returns to the landing,) the story and narration are enabled, then the
+  // director starts — in that order, so START always requests the run, even after a resumed or bypassed session (M16)
+  const click = /\$\('#start-demo'\)\.addEventListener\('click', \(\) => \{([\s\S]*?)\}\);/.exec(main)?.[1] ?? '';
+  assert.match(click, /director\.reset\(\);[\s\S]*enterMode\('guided'\);\s*director\.start\(\);/, 'GUIDED DEMO resets the director, enables the story and narration, then starts the director');
   assert.match(main, /if \(!resumed\) ledger\.claim\(\);/, 'the choosing click makes this tab the speaker');
 });
 

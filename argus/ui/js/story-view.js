@@ -18,7 +18,7 @@ function clock(at) {
 }
 const setHtml = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; } };
 
-export function createStoryView({ onChoose, onAttackAgain }) {
+export function createStoryView({ onChoose, onAttackAgain, onReset = () => {} }) {
   let busy = false;
   const rows = new Map();               // evidence key → <li> (kept, so an opened ▸ query stays open)
 
@@ -29,6 +29,15 @@ export function createStoryView({ onChoose, onAttackAgain }) {
     if (b.dataset.choice) { busy = true; onChoose(b.dataset.choice); }
     if (b.id === 'attack-again') { b.disabled = true; onAttackAgain(); }
   });
+  $('#story-notice').addEventListener('click', (e) => { if (e.target.closest('button#notice-reset')) onReset(); });
+
+  // a refusal, a failed run or a lost connection, said in the Story panel (the server's reason, never invented), with
+  // the way out when there is one; '' clears it
+  function notice(text, { reset = false } = {}) {
+    setHtml($('#story-notice'), text ? `${esc(text)}${reset ? '<button id="notice-reset">RESET AND START AGAIN</button>' : ''}` : '');
+  }
+  // forget the rendered actions so the next render re-enables buttons a click had disabled
+  function refreshActions() { busy = false; $('#story-actions').dataset.html = ''; }
 
   function head(m) {
     setHtml($('#chain'), m.chain.map((label, i) => `<li class="${i < m.step ? 'done' : i === m.step ? 'on' : ''}">${esc(label)}</li>`).join(''));
@@ -95,11 +104,13 @@ export function createStoryView({ onChoose, onAttackAgain }) {
 
   return {
     render(m, ctx) { head(m); panel(m); actions(m, ctx); whatif(m); evidence(m); final(m); },
+    notice,
+    refreshActions,
     clear() {
       busy = false;
       rows.clear();
       $('#ev-list').innerHTML = '';
-      for (const id of ['#whatif', '#final', '#story-actions']) { $(id).innerHTML = ''; $(id).dataset.html = ''; }   // markup and its cache together
+      for (const id of ['#whatif', '#final', '#story-actions', '#story-notice']) { $(id).innerHTML = ''; $(id).dataset.html = ''; }   // markup and its cache together
     },
   };
 }

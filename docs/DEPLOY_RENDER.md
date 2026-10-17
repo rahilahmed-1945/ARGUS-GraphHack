@@ -35,7 +35,7 @@ persistent disk, no credit card required ([free](https://render.com/docs/free), 
 | `ARGUS_AGENT_PASSWORD` | yes | any long random string (the restricted MCP identity) |
 | `ARGUS_UI_MODE` | no | `replay` (default, public) · `live` (operator slot) · `autopilot` |
 | `ARGUS_UI_CASSETTE` | no | `cassettes/public-live-replay.json` (default in the image) |
-| `ARGUS_PUBLIC_COOLDOWN_MS` | recommended | `15000` — one lifecycle action per client address per 15 s (operator bypasses) |
+| `ARGUS_PUBLIC_COOLDOWN_MS` | recommended | `15000` — one run *started* per client address per 15 s (operator bypasses). Reset, the judge's configure and ATTACK AGAIN are never rate-limited: they are steps of one interaction. A refused start is answered with the reason and the wait, and the UI retries once by itself. |
 | `OPENROUTER_API_KEY` | live only | secret |
 | `ARGUS_LLM_MODEL` | live only | e.g. `cohere/north-mini-code:free` |
 | `ARGUS_OPERATOR_TOKEN` | live only | a random string of 16+ characters |

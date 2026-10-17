@@ -64,5 +64,7 @@ export function createDirector({ onIntroLine, onIntroEnd, beginRun, beginPlaybac
     },
     /** an operator control (Run / Replay) skips the landing and intro */
     bypass() { for (const t of pending.splice(0)) timers.clearTimeout(t); if (phase === 'intro') onIntroEnd(); phase = 'playing'; },
+    /** back to the landing, so START works again (e.g. GUIDED DEMO chosen after a resumed or bypassed session) */
+    reset() { for (const t of pending.splice(0)) timers.clearTimeout(t); if (phase === 'intro') onIntroEnd(); phase = 'landing'; },
   };
 }

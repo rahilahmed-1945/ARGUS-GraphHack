@@ -99,20 +99,36 @@ test('2. live mode with an operator token: anonymous visitors cannot start a liv
   } finally { s.close(); await server.close(); }
 });
 
-test('3. public cooldown: lifecycle actions from the same client are rate-limited (the operator bypasses); replay mode needs no token', async () => {
-  const server = await startUiServer({ port: 0, cooldownMs: 1500, operatorToken: TOKEN });
+test('3. public cooldown: only run STARTS from the same client are rate-limited, with the reason and the wait in the ack; reset and configure never are; the operator bypasses; replay mode needs no token', async () => {
+  const server = await startUiServer({ port: 0, cooldownMs: 60000, operatorToken: TOKEN });
   const s = await client(server);
   try {
     assert.equal(server.info().operatorRequired, false, 'no live mode → no token needed for start');
-    const a = await s.control({ action: 'reset' });
-    assert.equal(a.error, null);
-    const b = await s.control({ action: 'reset' });
-    assert.match(b.error, /please wait \d+ s before the next action/);
-    const op = await s.control({ action: 'reset', token: TOKEN });
-    assert.equal(op.error, null, 'the operator is not rate-limited');
-    await sleep(1600);
-    const c = await s.control({ action: 'reset' });
-    assert.equal(c.error, null, 'after the cooldown the visitor may act again');
+    // reset and configure are free, in quick succession (the judge's click is reset → configure → start)
+    for (const msg of [{ action: 'reset' }, { action: 'reset' }, { action: 'configure', choice: 'keep' }, { action: 'configure', choice: 'off' }]) {
+      const r = await s.control(msg);
+      assert.equal(r.error, null, `${msg.action} is never rate-limited`);
+    }
+    // the first start of this address is accepted; it runs the judge demo on the configured graph
+    const first = await s.control({ action: 'start', interactive: true });
+    assert.equal(first.error, null);
+    assert.equal(first.status, 'running');
+    await s.until(() => ['awaiting', 'done', 'failed'].includes(server.info().status));
+    await s.control({ action: 'attack-again' });
+    await s.until(() => ['done', 'failed'].includes(server.info().status));
+    assert.equal(server.info().status, 'done', server.info().error);
+    // a second start inside the cooldown: refused, with the reason and a machine-readable wait; the session is untouched
+    const b = await s.control({ action: 'start' });
+    assert.match(b.error, /please wait \d+ s before starting another run/);
+    assert.ok(Number.isInteger(b.retryAfterMs) && b.retryAfterMs > 0 && b.retryAfterMs <= 60000, `retryAfterMs ${b.retryAfterMs}`);
+    assert.equal(b.status, 'done', 'the finished session was not reset by the refused start');
+    assert.equal(server.info().error, b.error, 'the refusal is visible in the state too');
+    // the operator is not rate-limited, and an accepted start clears the stale refusal
+    const op = await s.control({ action: 'start', token: TOKEN });
+    assert.equal(op.error, null, 'the operator is not rate-limited; the earlier refusal is not reported as this run\'s error');
+    assert.equal(op.status, 'running');
+    await s.until(() => ['done', 'failed'].includes(server.info().status));
+    assert.equal(server.info().status, 'done', server.info().error);
   } finally { s.close(); await server.close(); }
 });
 

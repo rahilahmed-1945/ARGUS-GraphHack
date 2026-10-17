@@ -39,7 +39,7 @@ const traces = new Map();         // the stored Cypher of each Step (side channe
 let story = null;
 let lastSpeech = null;
 let configuring = false;          // Control mode: a choice was clicked; the buttons stay disabled until the next fresh start
-const storyView = createStoryView({ onChoose: chooseConfiguration, onAttackAgain: () => send('attack-again') });
+const storyView = createStoryView({ onChoose: chooseConfiguration, onAttackAgain: attackAgain, onReset: resetAndStartAgain });
 
 // recompute the story from what has been presented so far; speak when a new beat is reached
 function tellStory() {
@@ -102,10 +102,22 @@ function resetView() {
 const socket = io({ transports: ['websocket'] });
 let server = { session: null, runId: null, status: 'connecting', mode: '', source: '', awaiting: null, interactive: false, choices: [] };
 
+// Control mode is resumed after a reload only in the tab that was in it: a new visitor must land on the landing page, not
+// in the middle of someone else's (or an earlier) judge session on the shared public server
+const CONTROL_KEY = 'argus.control.run';
+const remember = (k, v) => { try { if (v === null) storage?.removeItem(k); else storage?.setItem(k, v); } catch { /* storage blocked */ } };
+const recall = (k) => { try { return storage?.getItem(k) ?? null; } catch { return null; } };
+
 function onInfo(info) {
   server = { ...server, ...info };
   ledger.setRun(info.runId);                         // a new run id (Reset / Run again) → a fresh narration ledger
-  if (info.interactive && !mode) enterMode('control', { resumed: true });   // a reload during a Control session
+  if (info.interactive && !mode && recall(CONTROL_KEY) === info.runId) enterMode('control', { resumed: true });   // a reload during THIS tab's Control session
+  if (mode === 'control' && info.interactive) remember(CONTROL_KEY, info.runId);
+  if (info.status === 'running') storyView.notice('');
+  if (info.status === 'failed' && info.error) {      // a run that failed must be seen, not left as a silent "still working"
+    configuring = false;
+    storyView.notice(`The run failed: ${info.error}`, { reset: true });
+  }
   controls();
 }
 socket.on('hello', onInfo);
@@ -142,14 +154,52 @@ let userPaused = false;
 // token travels only inside control messages (never rendered, never stored) and is removed from the address bar
 const opToken = new URLSearchParams(location.search).get('op');
 if (opToken) history.replaceState(null, '', location.pathname + location.hash);
-const send = (action, extra = {}) => new Promise((resolve) => socket.emit('control', { action, ...extra, ...(opToken ? { token: opToken } : {}) }, resolve));
+/* DISPLAY CONSTANTS — how long a control may go unanswered before the visitor is told (ms). A start sent while a paused
+   judge run is being released is answered only once that run has finished, which takes a while on a small instance. */
+const ACK_TIMEOUT_MS = 45000;
+/* END DISPLAY CONSTANTS */
+// every control is answered: the server's ack (its state, plus `error` with the reason when it refused), or a timeout
+const send = (action, extra = {}) => new Promise((resolve) => {
+  const t = setTimeout(() => resolve({ ...server, error: `no answer from ARGUS within ${ACK_TIMEOUT_MS / 1000} s (connection lost?)`, timedOut: true }), ACK_TIMEOUT_MS);
+  socket.emit('control', { action, ...extra, ...(opToken ? { token: opToken } : {}) }, (info) => { clearTimeout(t); resolve(info); });
+});
+// a control the server refused (or that got no answer): the status did not move on; say why, re-enable the judge's buttons
+function refused(ack) {
+  if (!ack?.error || ['running', 'awaiting'].includes(ack.status) && !ack.timedOut) return false;
+  configuring = false;
+  storyView.notice(ack.error, { reset: !ack.retryAfterMs });
+  storyView.refreshActions();
+  tellStory();
+  return true;
+}
+// start a run; when the public cooldown refuses it, wait the time the server states and try exactly once more
+async function startRun(extra = {}) {
+  const ack = await send('start', extra);
+  if (ack?.retryAfterMs > 0) {
+    storyView.notice(`${ack.error}. ARGUS will start by itself.`);
+    await new Promise((r) => setTimeout(r, ack.retryAfterMs + 500));
+    return !refused(await send('start', extra));
+  }
+  return !refused(ack);
+}
+async function attackAgain() {
+  const ack = await send('attack-again');
+  if (ack?.status === 'running' || ack?.status === 'done') return;   // continued (or already finished)
+  refused({ ...ack, error: ack?.error || 'ARGUS could not continue the paused run' });
+}
+async function resetAndStartAgain() {
+  storyView.notice('');
+  configuring = false;
+  playback.pause();
+  refused(await send('reset'));
+}
 
 $('#btn-run').addEventListener('click', async () => {
   director.bypass();
   userPaused = false;
-  if (server.status === 'ready' && playback.log.length === 0) { playback.play(); await send('start', { interactive: mode === 'control' }); return; }
+  if (server.status === 'ready' && playback.log.length === 0) { playback.play(); await startRun({ interactive: mode === 'control' }); return; }
   if (server.status === 'running') { playback.play(); return; }
-  await send('start', { interactive: mode === 'control' });        // a finished session: the server resets and runs again
+  await startRun({ interactive: mode === 'control' });            // a finished session: the server resets and runs again
   playback.play();
 });
 $('#btn-pause').addEventListener('click', () => {
@@ -157,12 +207,12 @@ $('#btn-pause').addEventListener('click', () => {
 });
 $('#btn-speed').addEventListener('click', () => { speedIdx = (speedIdx + 1) % SPEEDS.length; playback.setSpeed(SPEEDS[speedIdx]); });
 $('#btn-replay').addEventListener('click', () => { if (!playback.log.length) return; director.bypass(); resetView(); userPaused = false; playback.restart(); playback.play(); });
-$('#btn-reset').addEventListener('click', async () => { userPaused = false; configuring = false; playback.pause(); await send('reset'); });
+$('#btn-reset').addEventListener('click', async () => { userPaused = false; configuring = false; playback.pause(); refused(await send('reset')); });
 
 // ---------------------------------------------------------------- GUIDED DEMO: one click → the cast → the canonical run
 async function beginRun() {
   if (server.status === 'running') return;
-  await send('start');        // a finished session: the server resets FalkorDB and runs the canonical demo again
+  await startRun();           // a finished (or paused judge) session: the server resets FalkorDB and runs the canonical demo again
 }
 const director = createDirector({
   onIntroLine(i, line) {
@@ -194,20 +244,34 @@ function enterMode(next, { resumed = false } = {}) {
   controls();
 }
 $('#start-demo').addEventListener('click', () => {
+  playback.pause();                                   // whatever was being presented (a resumed session) stops here
+  storyView.notice('');
+  director.reset();                                   // START must work even after a resumed or bypassed session
+  remember(CONTROL_KEY, null);
   enterMode('guided');
   director.start();
   controls(); render();
 });
 // ---------------------------------------------------------------- CONTROL THE SYSTEM: the judge configures, then attacks again
 $('#start-control').addEventListener('click', async () => {
-  if (server.status !== 'ready' || server.interactive) await send('reset');   // start from the untouched graph
+  storyView.notice('');
   configuring = false;
+  if (server.status !== 'ready' || server.interactive) {      // start from the untouched graph (a paused run finishes first)
+    playback.pause();
+    for (const b of document.querySelectorAll('.sb-choices button')) b.disabled = true;
+    const ack = await send('reset');
+    for (const b of document.querySelectorAll('.sb-choices button')) b.disabled = false;
+    enterMode('control');
+    refused(ack);
+    return;
+  }
   enterMode('control');
 });
 async function chooseConfiguration(choice) {
   configuring = true;
-  await send('configure', { choice });                // a real write on TWIN and WORLD; the judge message follows
-  setTimeout(async () => { userPaused = false; playback.play(); await send('start', { interactive: true }); }, JUDGE_HOLD_MS);
+  storyView.notice('');
+  if (refused(await send('configure', { choice }))) return;   // a real write on TWIN and WORLD; the judge message follows
+  setTimeout(async () => { userPaused = false; playback.play(); await startRun({ interactive: true }); }, JUDGE_HOLD_MS);
 }
 
 // the voice: on by default once a mode is chosen; muting never replays what was missed
