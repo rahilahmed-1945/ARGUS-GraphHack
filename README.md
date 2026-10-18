@@ -205,34 +205,6 @@ If the model is slow, stuck or invalid, a deterministic autopilot (B5) takes ove
 
 After the seed the twin holds 8 `Service`, 9 `CALLS`, 2 `ChangeEvent`, 10 `Fault` and 27 `Intervention` nodes. The full schema is in [docs/ARGUS_FINAL_ARCHITECTURE.md](docs/ARGUS_FINAL_ARCHITECTURE.md) §5.
 
-### How ARGUS uses FalkorDB and AI agents
-
-```mermaid
-flowchart TD
-    U["System topology and configuration"]
-    DB[("FalkorDB<br/>System graph + action space")]
-    RED["RED AI Agent<br/>Discover failure scenarios"]
-    MCP["MCP Tool Servers<br/>Queries, simulations and access control"]
-    FORK[("FalkorDB GRAPH.COPY<br/>Counterfactual graph forks")]
-    BLUE["BLUE AI Agent<br/>Evaluate candidate fixes"]
-    AUDIT["Server-side Decision Rule<br/>Safety + minimality audit"]
-    WORLD[("Hidden WORLD Graph<br/>Simulated ground truth")]
-    OBS["Verification<br/>Predicted vs observed outcomes"]
-
-    U --> DB
-    DB <--> MCP
-    MCP <--> RED
-    MCP <--> BLUE
-    MCP --> FORK
-    FORK --> BLUE
-    BLUE --> AUDIT
-    AUDIT --> DB
-    AUDIT --> WORLD
-    WORLD --> OBS
-    OBS --> DB
-```
-
-**How it works:** FalkorDB stores the system topology, faults, interventions and evidence. The RED and BLUE AI agents use MCP tools to query the graph, discover dangerous failure scenarios and evaluate possible fixes on copied graphs. A server-side decision rule independently checks safety and scoped minimality before applying a fix to the system twin and the separate simulated WORLD graph. ARGUS then compares predicted outcomes with observed outcomes.
 
 ### Graph schema at a glance
 
