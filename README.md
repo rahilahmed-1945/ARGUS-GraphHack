@@ -205,6 +205,30 @@ If the model is slow, stuck or invalid, a deterministic autopilot (B5) takes ove
 
 After the seed the twin holds 8 `Service`, 9 `CALLS`, 2 `ChangeEvent`, 10 `Fault` and 27 `Intervention` nodes. The full schema is in [docs/ARGUS_FINAL_ARCHITECTURE.md](docs/ARGUS_FINAL_ARCHITECTURE.md) §5.
 
+### Graph schema at a glance
+
+```mermaid
+flowchart TD
+    S["Service"] -->|CALLS| S2["Service"]
+    C["ChangeEvent"] -->|MODIFIES| S
+    F["Fault"] -->|LANDS| C
+    F -->|APPLIES_TO| S
+    I["Intervention"] -->|APPLIES_TO| S
+    I -->|BLOCKS| C
+
+    SC["Scenario"] -->|CONTAINS| F
+    SC -->|EVIDENCED_BY| S
+    SC -->|PRODUCES| FU["Future"]
+    FU -->|TESTS| I
+    FU -->|FROM| SN["Snapshot"]
+
+    D["Decision"] -->|ADDRESSES| SC
+    D -->|SELECTS| I
+    O["Observation"] -->|VERIFIES| D
+```
+
+**How the agent uses the graph:** RED queries service-call paths and fault evidence to discover risky failure scenarios. BLUE evaluates candidate interventions against graph-derived state using counterfactual graph forks. The server audits the selected intervention, records the decision, and checks the predicted outcome against observations from the separate simulated WORLD graph.
+
 ### Cypher the product depends on
 
 All five queries below were executed against the seeded twin on FalkorDB 6.0.1 while writing this README; the results quoted are what they returned.
