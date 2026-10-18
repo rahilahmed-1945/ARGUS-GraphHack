@@ -4,14 +4,16 @@
 
 ARGUS is a graph-grounded RED / BLUE agent that attacks a copy of your system in FalkorDB, tests candidate fixes on forked graphs, and only applies a fix the server can prove is the cheapest safe one in scope.
 
+Display note: For the best experience, open the live demo in Google Chrome with the browser maximized or full-screen. The interface is designed for a full-width desktop window and may not display correctly when Chrome is snapped to half the screen or used in a narrow window.
+
 | | |
 |---|---|
 | **Live demo** | https://argus-graphhack.onrender.com (free tier: the first request can take about a minute to wake) |
 | **Health** | https://argus-graphhack.onrender.com/state |
 | **Repository** | https://github.com/rahilahmed-1945/ARGUS-GraphHack |
 | **Hackathon** | [Graph Hacks: Context for AI Agents](https://www.wemakedevs.org/hackathons/falkordb) by WeMakeDevs × FalkorDB, 15–18 Oct 2026. **Track 01: Agents That Act on Connected Data.** |
-| **Demo video** | Coming soon. The link will be added here once the recording exists. |
-
+| **Demo video** | https://youtu.be/056j4MI525c |
+| **Project Blog** | https://medium.com/@rahilahmed1305/i-built-argus-an-ai-agent-that-doesnt-just-suggest-fixes-it-has-to-prove-them-88d406feff63 |
 ---
 
 # Run ARGUS Yourself — Bring Your Own API Key
